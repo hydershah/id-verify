@@ -42,13 +42,43 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/id-verify', {
+// Database connection with Railway support
+const mongoUri = process.env.DATABASE_URL || 
+                 process.env.MONGODB_URI || 
+                 process.env.MONGO_URL || 
+                 'mongodb://localhost:27017/id-verify';
+
+console.log('Connecting to MongoDB...');
+console.log('Environment:', process.env.NODE_ENV || 'development');
+console.log('MongoDB URI configured:', mongoUri ? 'Yes' : 'No');
+
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('MongoDB connected'))
-.catch(err => console.log('MongoDB connection error:', err));
+.then(() => {
+  console.log('MongoDB connected successfully');
+  console.log('Database name:', mongoose.connection.db.databaseName);
+})
+.catch(err => {
+  console.log('MongoDB connection error:', err);
+  if (process.env.NODE_ENV === 'production') {
+    console.log('💡 Railway MongoDB Setup Guide:');
+    console.log('1. Add MongoDB plugin to your Railway project');
+    console.log('2. Railway will automatically set DATABASE_URL environment variable');
+    console.log('3. Make sure to deploy after adding the plugin');
+  }
+});
+
+// Health check endpoint for Railway
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
