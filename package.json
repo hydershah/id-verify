@@ -12,6 +12,7 @@
     "client:build": "cd client && npm run build",
     "heroku-postbuild": "npm run build",
     "railway:build": "npm run build",
+    "create-admin": "node scripts/create-admin.js",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
