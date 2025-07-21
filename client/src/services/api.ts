@@ -9,6 +9,7 @@ import {
   AdminStats,
   VerificationStats
 } from '../types';
+import { resolveErrorMessage } from '../utils/errorMessages';
 
 class ApiService {
   private api: AxiosInstance;
@@ -53,13 +54,49 @@ class ApiService {
 
   // Auth API calls
   async login(credentials: LoginData): Promise<{ user: User; token: string; message: string }> {
-    const response = await this.api.post('/auth/login', credentials);
-    return response.data;
+    console.log('🌐 API Service: Sending login request', { 
+      ...credentials, 
+      password: '[HIDDEN]' 
+    });
+    
+    try {
+      const response = await this.api.post('/auth/login', credentials);
+      console.log('✅ API Service: Login successful', {
+        status: response.status,
+        user: response.data.user
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('💥 API Service: Login failed', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
   }
 
   async register(userData: RegisterData): Promise<{ user: User; token: string; message: string }> {
-    const response = await this.api.post('/auth/register', userData);
-    return response.data;
+    console.log('🌐 API Service: Sending registration request', { 
+      ...userData, 
+      password: '[HIDDEN]' 
+    });
+    
+    try {
+      const response = await this.api.post('/auth/register', userData);
+      console.log('✅ API Service: Registration successful', {
+        status: response.status,
+        user: response.data.user
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('💥 API Service: Registration failed', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
   }
 
   async getCurrentUser(): Promise<User> {
@@ -89,6 +126,21 @@ class ApiService {
   }
 
   // Verification API calls
+  async getCurrentVerification(): Promise<{ verification: Verification | null }> {
+    console.log('🔍 Fetching current verification data...');
+    try {
+      const response = await this.api.get('/verification/current');
+      console.log('✅ Current verification data fetched:', {
+        hasVerification: !!response.data.verification,
+        status: response.data.verification?.status
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('💥 Error fetching verification data:', error);
+      throw error;
+    }
+  }
+
   async uploadVerification(verificationData: VerificationUpload): Promise<{ verification: Verification; message: string }> {
     const formData = new FormData();
     formData.append('documentType', verificationData.documentType);

@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { VerificationUpload } from '../types';
+import { VerificationUpload, Verification as VerificationType } from '../types';
 import apiService from '../services/api';
+import { notifications, NOTIFICATION_MESSAGES, showApiError } from '../utils/notifications';
 
 const Verification: React.FC = () => {
   const [formData, setFormData] = useState<VerificationUpload>({
@@ -10,7 +11,9 @@ const Verification: React.FC = () => {
     backImage: undefined,
     portraitImage: undefined,
   });
+  const [existingVerification, setExistingVerification] = useState<VerificationType | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState<{ [key: string]: boolean }>({});
@@ -20,6 +23,36 @@ const Verification: React.FC = () => {
   const portraitImageRef = useRef<HTMLInputElement>(null);
   
   const navigate = useNavigate();
+
+  // Load existing verification data on component mount
+  useEffect(() => {
+    const loadVerificationData = async () => {
+      try {
+        setIsLoadingData(true);
+        const result = await apiService.getCurrentVerification();
+        if (result.verification) {
+          setExistingVerification(result.verification);
+          // Set form data from existing verification
+          setFormData(prev => ({
+            ...prev,
+            documentType: result.verification?.documentType || 'DriversLicense'
+          }));
+          console.log('📋 Loaded existing verification:', {
+            id: result.verification.id,
+            status: result.verification.status,
+            documentType: result.verification.documentType
+          });
+        }
+      } catch (error) {
+        console.error('Error loading verification data:', error);
+        // Don't show error for missing verification - it's normal for new users
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    loadVerificationData();
+  }, []);
 
   const documentTypes = [
     { value: 'DriversLicense', label: "Driver's License" },
@@ -97,17 +130,22 @@ const Verification: React.FC = () => {
   };
 
   const validateForm = () => {
-    if (!formData.frontImage) {
+    // Check if we have either new files or existing images
+    const hasFrontImage = formData.frontImage || existingVerification?.documents?.frontImage;
+    const hasBackImage = formData.backImage || existingVerification?.documents?.backImage;
+    const hasPortraitImage = formData.portraitImage || existingVerification?.documents?.portraitImage;
+
+    if (!hasFrontImage) {
       setError('Please upload the front image of your document');
       return false;
     }
     
-    if (formData.documentType === 'DriversLicense' && !formData.backImage) {
+    if (formData.documentType === 'DriversLicense' && !hasBackImage) {
       setError('Please upload the back image of your driver\'s license');
       return false;
     }
     
-    if (!formData.portraitImage) {
+    if (!hasPortraitImage) {
       setError('Please upload a selfie for identity verification');
       return false;
     }
@@ -128,13 +166,21 @@ const Verification: React.FC = () => {
     
     try {
       await apiService.uploadVerification(formData);
+      
+      // Clear form state and show success
       setSuccess('Documents uploaded successfully! Processing verification...');
+      notifications.success(NOTIFICATION_MESSAGES.VERIFICATION.UPLOAD_SUCCESS);
       
       setTimeout(() => {
         navigate('/dashboard');
       }, 2000);
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to upload documents. Please try again.');
+      console.error('💥 Verification upload error:', error);
+      
+      // Show both inline error (for form context) and toast notification
+      const errorMessage = error.response?.data?.message || 'Failed to upload documents. Please try again.';
+      setError(errorMessage);
+      showApiError(error, NOTIFICATION_MESSAGES.VERIFICATION.UPLOAD_ERROR);
     } finally {
       setIsLoading(false);
     }
@@ -144,13 +190,71 @@ const Verification: React.FC = () => {
     return URL.createObjectURL(file);
   };
 
+  // Helper function to get image source (either from new upload or existing verification)
+  const getImageSrc = (file: File | undefined, existingImageData: any, fieldName: 'frontImage' | 'backImage' | 'portraitImage'): string | undefined => {
+    if (file) {
+      // New file uploaded
+      return getFilePreview(file);
+    } else if (existingVerification?.documents?.[fieldName]?.path) {
+      // Existing image from server - use path instead of url
+      return `/api/verification/documents/${existingVerification.documents[fieldName]?.fileName}`;
+    }
+    return undefined;
+  };
+
+  const getImageName = (file: File | undefined, existingImageData: any, fieldName: 'frontImage' | 'backImage' | 'portraitImage') => {
+    if (file) {
+      return file.name;
+    } else if (existingVerification?.documents?.[fieldName]?.originalName) {
+      return existingVerification.documents[fieldName]?.originalName;
+    }
+    return 'Unknown file';
+  };
+
+  // Show loading spinner while fetching verification data
+  if (isLoadingData) {
+    return (
+      <div className="max-w-4xl mx-auto flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading verification data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Identity Verification</h1>
         <p className="text-gray-600">
-          Upload your documents to verify your identity. All information is encrypted and secure.
+          {existingVerification 
+            ? `Your verification status is: ${existingVerification.status}. You can update your documents below if needed.`
+            : 'Upload your documents to verify your identity. All information is encrypted and secure.'
+          }
         </p>
+        {existingVerification && existingVerification.status === 'approved' && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-green-800 font-medium">✅ Your identity has been successfully verified!</p>
+            {existingVerification.extractedData && (
+              <p className="text-green-700 text-sm mt-1">
+                Verified: {existingVerification.extractedData.firstName} {existingVerification.extractedData.lastName}
+              </p>
+            )}
+          </div>
+        )}
+        {existingVerification && existingVerification.status === 'denied' && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-800 font-medium">❌ Verification was not successful.</p>
+            <p className="text-red-700 text-sm mt-1">Please upload new, clear photos of your documents.</p>
+          </div>
+        )}
+        {existingVerification && existingVerification.status === 'pending' && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-yellow-800 font-medium">⏳ Your verification is being processed.</p>
+            <p className="text-yellow-700 text-sm mt-1">This usually takes a few minutes. You can update your documents if needed.</p>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -203,15 +307,23 @@ const Verification: React.FC = () => {
             onDragOver={(e) => handleDrag(e, 'frontImage')}
             onDrop={(e) => handleDrop(e, 'frontImage')}
           >
-            {formData.frontImage ? (
+            {formData.frontImage || existingVerification?.documents?.frontImage ? (
               <div className="space-y-4">
                 <img
-                  src={getFilePreview(formData.frontImage)}
+                  src={getImageSrc(formData.frontImage, null, 'frontImage')}
                   alt="Front of document"
                   className="max-w-xs mx-auto rounded-lg shadow-md"
                 />
                 <div>
-                  <p className="text-sm text-gray-600">{formData.frontImage.name}</p>
+                  <p className="text-sm text-gray-600">{getImageName(formData.frontImage, null, 'frontImage')}</p>
+                  {existingVerification?.status && (
+                    <p className="text-xs text-blue-600 mb-2">
+                      Status: <span className="font-medium capitalize">{existingVerification.status}</span>
+                      {existingVerification.confidence && (
+                        <span className="ml-2">({existingVerification.confidence}% confidence)</span>
+                      )}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => frontImageRef.current?.click()}
@@ -266,15 +378,15 @@ const Verification: React.FC = () => {
               onDragOver={(e) => handleDrag(e, 'backImage')}
               onDrop={(e) => handleDrop(e, 'backImage')}
             >
-              {formData.backImage ? (
+              {formData.backImage || existingVerification?.documents?.backImage ? (
                 <div className="space-y-4">
                   <img
-                    src={getFilePreview(formData.backImage)}
+                    src={getImageSrc(formData.backImage, null, 'backImage')}
                     alt="Back of document"
                     className="max-w-xs mx-auto rounded-lg shadow-md"
                   />
                   <div>
-                    <p className="text-sm text-gray-600">{formData.backImage.name}</p>
+                    <p className="text-sm text-gray-600">{getImageName(formData.backImage, null, 'backImage')}</p>
                     <button
                       type="button"
                       onClick={() => backImageRef.current?.click()}
@@ -329,15 +441,23 @@ const Verification: React.FC = () => {
             onDragOver={(e) => handleDrag(e, 'portraitImage')}
             onDrop={(e) => handleDrop(e, 'portraitImage')}
           >
-            {formData.portraitImage ? (
+            {formData.portraitImage || existingVerification?.documents?.portraitImage ? (
               <div className="space-y-4">
                 <img
-                  src={getFilePreview(formData.portraitImage)}
+                  src={getImageSrc(formData.portraitImage, null, 'portraitImage')}
                   alt="Selfie"
                   className="max-w-xs mx-auto rounded-lg shadow-md"
                 />
                 <div>
-                  <p className="text-sm text-gray-600">{formData.portraitImage.name}</p>
+                  <p className="text-sm text-gray-600">{getImageName(formData.portraitImage, null, 'portraitImage')}</p>
+                  {existingVerification?.biometric && (
+                    <p className="text-xs text-green-600 mb-2">
+                      Face Match: {existingVerification.biometric.faceMatch ? '✓ Verified' : '✗ Failed'}
+                      {existingVerification.biometric.confidence && (
+                        <span className="ml-2">({existingVerification.biometric.confidence}% match)</span>
+                      )}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => portraitImageRef.current?.click()}
@@ -408,7 +528,7 @@ const Verification: React.FC = () => {
                 Processing...
               </div>
             ) : (
-              'Submit for Verification'
+              existingVerification ? 'Update Verification' : 'Submit for Verification'
             )}
           </button>
         </div>

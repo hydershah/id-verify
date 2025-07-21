@@ -85,12 +85,18 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/verification', require('./routes/verification'));
 
-// Serve static files from the React app in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'client/build')));
+// Serve static files from the React app in production and development (if build exists)
+const buildPath = path.join(__dirname, 'client/build');
+if (process.env.NODE_ENV === 'production' || require('fs').existsSync(buildPath)) {
+  app.use(express.static(buildPath));
   
+  // Only serve React app for non-API routes
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+    // Don't serve React app for API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ message: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(buildPath, 'index.html'));
   });
 }
 

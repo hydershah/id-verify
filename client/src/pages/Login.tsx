@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { resolveErrorMessage, ERROR_MESSAGES } from '../utils/errorMessages';
+import { notifications, NOTIFICATION_MESSAGES, showApiError } from '../utils/notifications';
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -30,17 +32,27 @@ const Login: React.FC = () => {
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
 
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+    // Email validation
+    if (!formData.email || formData.email.trim() === '') {
+      newErrors.email = ERROR_MESSAGES.VALIDATION.EMAIL_REQUIRED;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      newErrors.email = ERROR_MESSAGES.VALIDATION.EMAIL_INVALID;
     }
 
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
+    // Password validation
+    if (!formData.password || formData.password.trim() === '') {
+      newErrors.password = ERROR_MESSAGES.VALIDATION.PASSWORD_REQUIRED;
     } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+      newErrors.password = ERROR_MESSAGES.VALIDATION.PASSWORD_TOO_SHORT;
+    } else if (formData.password.length > 100) {
+      newErrors.password = ERROR_MESSAGES.VALIDATION.PASSWORD_TOO_LONG;
     }
+
+    console.log('🔍 Login form validation results:', {
+      hasErrors: Object.keys(newErrors).length > 0,
+      errors: newErrors,
+      formData: { ...formData, password: '[HIDDEN]' }
+    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -49,18 +61,65 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('🔐 Login form submission started');
+    console.log('📝 Form data:', { ...formData, password: '[HIDDEN]' });
+    
     if (!validateForm()) {
+      console.log('❌ Login form validation failed');
       return;
     }
 
     setIsLoading(true);
+    setErrors({}); // Clear previous errors
+    
     try {
-      await login(formData);
-      navigate('/dashboard');
+      console.log('📡 Sending login request...');
+      
+      // Clean and format the data
+      const cleanData = {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password.trim()
+      };
+      
+      console.log('🧹 Cleaned data:', { ...cleanData, password: '[HIDDEN]' });
+      
+      await login(cleanData);
+      console.log('✅ Login successful, navigating to dashboard');
+      
+      // Show success notification
+      notifications.success(NOTIFICATION_MESSAGES.AUTH.LOGIN_SUCCESS);
+      
+      // Navigate after a short delay to let user see the success message
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
     } catch (error: any) {
-      setErrors({
-        general: error.response?.data?.message || 'Login failed. Please try again.'
-      });
+      console.error('💥 Login error:', error);
+      console.error('📄 Error response:', error.response?.data);
+      console.error('🔢 Status code:', error.response?.status);
+      console.error('🔍 Full error object:', error);
+      
+      // Use centralized error message resolver
+      const errorMessage = resolveErrorMessage(error);
+      console.log('✅ Resolved error message:', errorMessage);
+      
+      // Always show the error notification
+      notifications.error(errorMessage);
+      
+      // Also set inline error for form display
+      const errorData = error.response?.data;
+      const newErrors: { [key: string]: string } = {};
+      
+      if (errorData?.field && errorData?.errorType) {
+        // Field-specific error - show in the appropriate field
+        newErrors[errorData.field] = errorMessage;
+        console.log(`🎯 Field-specific error for ${errorData.field}:`, errorMessage);
+      } else {
+        // General error - show in general error area
+        newErrors.general = errorMessage;
+      }
+      
+      setErrors(newErrors);
     } finally {
       setIsLoading(false);
     }
@@ -87,9 +146,30 @@ const Login: React.FC = () => {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+
+          
           {errors.general && (
-            <div className="bg-danger-50 border border-danger-200 rounded-md p-4">
-              <p className="text-sm text-danger-700">{errors.general}</p>
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">
+                    Login Error
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>{errors.general}</p>
+                    {errors.general.toLowerCase().includes('too many') && (
+                      <p className="mt-2 text-xs">
+                        Please wait before trying again to protect your account security.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

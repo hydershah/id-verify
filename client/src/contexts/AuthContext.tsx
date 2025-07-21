@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState, LoginData, RegisterData } from '../types';
 import apiService from '../services/api';
+import { notifications, NOTIFICATION_MESSAGES } from '../utils/notifications';
 
 interface AuthContextType {
   user: User | null;
@@ -144,6 +145,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isLoading: false,
       isAuthenticated: false,
     });
+    
+    // Show logout notification
+    notifications.success(NOTIFICATION_MESSAGES.AUTH.LOGOUT_SUCCESS);
   };
 
   const updateUser = (userData: Partial<User>) => {

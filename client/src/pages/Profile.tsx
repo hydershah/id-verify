@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 // import { User } from '../types';
 import apiService from '../services/api';
+import { notifications, NOTIFICATION_MESSAGES, showApiError } from '../utils/notifications';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuth();
@@ -47,9 +48,17 @@ const Profile: React.FC = () => {
     try {
       const response = await apiService.updateUserProfile(formData);
       updateUser(response.user);
+      
+      // Show success notification and inline message
       setSuccess('Profile updated successfully!');
+      notifications.success(NOTIFICATION_MESSAGES.AUTH.PROFILE_UPDATED);
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to update profile');
+      console.error('💥 Profile update error:', error);
+      
+      // Show both inline error and toast notification
+      const errorMessage = error.response?.data?.message || 'Failed to update profile';
+      setError(errorMessage);
+      showApiError(error, 'Failed to update your profile. Please try again.');
     } finally {
       setIsLoading(false);
     }

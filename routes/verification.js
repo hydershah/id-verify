@@ -15,6 +15,67 @@ const validateStatus = (status) => {
   return validStatuses.includes(status) ? status : 'pending';
 };
 
+// Helper function to create image URLs
+const createImageUrl = (filePath) => {
+  if (!filePath) return null;
+  // Convert file path to URL format
+  return filePath.replace(/\\/g, '/').replace('uploads/', '/uploads/');
+};
+
+// @route   GET /api/verification/current
+// @desc    Get current user's verification data
+// @access  Private
+router.get('/current', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Find the most recent verification for this user
+    const verification = await Verification.findOne({ userId })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    if (!verification) {
+      return res.json({ verification: null });
+    }
+    
+    // Create image URLs for frontend display
+    const verificationWithUrls = {
+      ...verification,
+      documents: {
+        frontImage: verification.documents.frontImage ? {
+          ...verification.documents.frontImage,
+          url: createImageUrl(verification.documents.frontImage.path)
+        } : null,
+        backImage: verification.documents.backImage ? {
+          ...verification.documents.backImage,
+          url: createImageUrl(verification.documents.backImage.path)
+        } : null,
+        portraitImage: verification.documents.portraitImage ? {
+          ...verification.documents.portraitImage,
+          url: createImageUrl(verification.documents.portraitImage.path)
+        } : null
+      }
+    };
+    
+    console.log('📋 Fetched verification data for user:', {
+      userId,
+      verificationId: verification._id,
+      status: verification.status,
+      hasImages: {
+        front: !!verification.documents.frontImage,
+        back: !!verification.documents.backImage,
+        portrait: !!verification.documents.portraitImage
+      }
+    });
+    
+    res.json({ verification: verificationWithUrls });
+    
+  } catch (error) {
+    console.error('Error fetching verification data:', error);
+    res.status(500).json({ message: 'Error fetching verification data' });
+  }
+});
+
 // @route   POST /api/verification/upload
 // @desc    Upload documents for verification
 // @access  Private
