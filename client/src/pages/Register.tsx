@@ -169,14 +169,16 @@ const Register: React.FC = () => {
     }
   };
 
-  // Add debug logging to help track form state
-  console.log('🔍 Register Form Debug:', {
-    formData: { ...formData, password: '[HIDDEN]', confirmPassword: '[HIDDEN]' },
-    errors,
-    isLoading,
-    hasGeneralError: !!errors.general,
-    hasFieldErrors: Object.keys(errors).filter(key => key !== 'general').length > 0
-  });
+  // Debug logging only in development and only when there are errors
+  if (process.env.NODE_ENV === 'development' && Object.keys(errors).length > 0) {
+    console.log('🔍 Register Form Debug:', {
+      formData: { ...formData, password: '[HIDDEN]', confirmPassword: '[HIDDEN]' },
+      errors,
+      isLoading,
+      hasGeneralError: !!errors.general,
+      hasFieldErrors: Object.keys(errors).filter(key => key !== 'general').length > 0
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-white flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
