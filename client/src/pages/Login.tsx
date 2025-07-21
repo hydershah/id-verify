@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { resolveErrorMessage, ERROR_MESSAGES } from '../utils/errorMessages';
-import { notifications, NOTIFICATION_MESSAGES, showApiError } from '../utils/notifications';
+import { notifications, NOTIFICATION_MESSAGES } from '../utils/notifications';
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({

@@ -1,5 +1,5 @@
 import React from 'react';
-import { notifications, NOTIFICATION_MESSAGES, handleAsyncWithToast } from '../../utils/notifications';
+import { notifications, handleAsyncWithToast } from '../../utils/notifications';
 import NotificationTest from '../../components/NotificationTest';
 
 const AdminUsers: React.FC = () => {

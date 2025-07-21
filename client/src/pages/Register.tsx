@@ -76,7 +76,7 @@ const Register: React.FC = () => {
 
     // Phone number validation (optional field)
     if (formData.phoneNumber && formData.phoneNumber.trim() !== '') {
-      const phoneRegex = /^\+?[\d\s\-\(\)\.]{7,20}$/;
+      const phoneRegex = /^\+?[\d\s\-().]{7,20}$/;
       if (!phoneRegex.test(formData.phoneNumber)) {
         newErrors.phoneNumber = ERROR_MESSAGES.VALIDATION.PHONE_INVALID;
       }
